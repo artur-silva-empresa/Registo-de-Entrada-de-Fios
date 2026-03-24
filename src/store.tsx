@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import * as db from './lib/database';
 
 export type RequestItem = {
   id: string;
@@ -35,99 +36,142 @@ type AppState = {
 
 type AppContextType = {
   state: AppState;
-  addRequest: (request: Omit<Request, 'id' | 'uploadDate'>, items: Omit<RequestItem, 'id' | 'requestId'>[]) => void;
-  addDelivery: (itemId: string, quantity: number, deliveryNote: string, deliveryDate: string, observations: string) => void;
-  deleteRequest: (id: string) => void;
-  clearAll: () => void;
+  addRequest: (request: Omit<Request, 'id' | 'uploadDate'>, items: Omit<RequestItem, 'id' | 'requestId'>[]) => Promise<void>;
+  addDelivery: (itemId: string, quantity: number, deliveryNote: string, deliveryDate: string, observations: string) => Promise<void>;
+  deleteRequest: (id: string) => Promise<void>;
+  clearAll: () => Promise<void>;
+  isConnected: boolean;
+  connectToDb: () => Promise<void>;
+  refreshData: () => Promise<void>;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'fios_app_data';
-
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AppState>({ requests: [], items: [], deliveries: [] });
   const [isLoading, setIsLoading] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
+    if (!db.isConnected()) return;
+
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setState(JSON.parse(stored));
-      }
+      const requests = db.query('SELECT * FROM requests ORDER BY uploadDate DESC') as Request[];
+      const items = db.query('SELECT * FROM items') as RequestItem[];
+      const deliveries = db.query('SELECT * FROM deliveries') as Delivery[];
+
+      setState({ requests, items, deliveries });
     } catch (e) {
-      console.error('Failed to load state from localStorage', e);
-    } finally {
-      setIsLoading(false);
+      console.error('Failed to fetch data from SQLite', e);
     }
   }, []);
 
   useEffect(() => {
-    if (!isLoading) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const init = async () => {
+      try {
+        const connected = await db.initDatabase();
+        setIsConnected(connected);
+        if (connected) {
+          await fetchData();
+        }
+      } catch (e) {
+        console.error('Failed to init database', e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    init();
+  }, [fetchData]);
+
+  // Polling for real-time (every 10 seconds)
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const reloaded = await db.reloadDatabase();
+        if (reloaded) {
+          await fetchData();
+        }
+      } catch (e) {
+        console.error('Polling failed', e);
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [isConnected, fetchData]);
+
+  const connectToDb = async () => {
+    try {
+      const success = await db.selectFile();
+      setIsConnected(success);
+      if (success) {
+        await fetchData();
+      }
+    } catch (e) {
+      console.error('Failed to select file', e);
     }
-  }, [state, isLoading]);
+  };
 
   const addRequest = async (req: Omit<Request, 'id' | 'uploadDate'>, newItems: Omit<RequestItem, 'id' | 'requestId'>[]) => {
     const requestId = crypto.randomUUID();
-    const request: Request = {
-      ...req,
-      id: requestId,
-      uploadDate: new Date().toISOString(),
-    };
+    const uploadDate = new Date().toISOString();
 
-    const items: RequestItem[] = newItems.map(item => ({
-      ...item,
-      id: crypto.randomUUID(),
-      requestId,
-    }));
+    await db.execute(
+      'INSERT INTO requests (id, date, number, uploadDate) VALUES (?, ?, ?, ?)',
+      [requestId, req.date, req.number, uploadDate]
+    );
 
-    setState(prev => ({
-      ...prev,
-      requests: [request, ...prev.requests],
-      items: [...prev.items, ...items],
-    }));
+    for (const item of newItems) {
+      const itemId = crypto.randomUUID();
+      await db.execute(
+        'INSERT INTO items (id, requestId, section, quantity, description, coneColor, observations) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [itemId, requestId, item.section, item.quantity, item.description, item.coneColor, item.observations]
+      );
+    }
+
+    await fetchData();
   };
 
   const addDelivery = async (itemId: string, quantity: number, deliveryNote: string, deliveryDate: string, observations: string) => {
-    const delivery: Delivery = {
-      id: crypto.randomUUID(),
-      itemId,
-      quantity,
-      date: new Date().toISOString(),
-      deliveryNote,
-      deliveryDate,
-      observations,
-    };
+    const id = crypto.randomUUID();
+    const date = new Date().toISOString();
 
-    setState(prev => ({
-      ...prev,
-      deliveries: [delivery, ...prev.deliveries],
-    }));
+    await db.execute(
+      'INSERT INTO deliveries (id, itemId, quantity, date, deliveryNote, deliveryDate, observations) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, itemId, quantity, date, deliveryNote, deliveryDate, observations]
+    );
+
+    await fetchData();
   };
 
   const deleteRequest = async (id: string) => {
-    setState(prev => ({
-      ...prev,
-      requests: prev.requests.filter(r => r.id !== id),
-      items: prev.items.filter(i => i.requestId !== id),
-      deliveries: prev.deliveries.filter(d => {
-        const item = prev.items.find(i => i.id === d.itemId);
-        return item?.requestId !== id;
-      }),
-    }));
+    await db.execute('DELETE FROM requests WHERE id = ?', [id]);
+    await fetchData();
   };
 
   const clearAll = async () => {
-    setState({ requests: [], items: [], deliveries: [] });
+    await db.execute('DELETE FROM deliveries');
+    await db.execute('DELETE FROM items');
+    await db.execute('DELETE FROM requests');
+    await fetchData();
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen bg-slate-50 text-slate-500">A carregar dados...</div>;
+    return <div className="flex items-center justify-center h-screen bg-slate-50 text-slate-500 text-lg">A inicializar sistema...</div>;
   }
 
   return (
-    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll }}>
+    <AppContext.Provider value={{
+      state,
+      addRequest,
+      addDelivery,
+      deleteRequest,
+      clearAll,
+      isConnected,
+      connectToDb,
+      refreshData: fetchData
+    }}>
       {children}
     </AppContext.Provider>
   );
