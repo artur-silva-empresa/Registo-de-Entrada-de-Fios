@@ -1,6 +1,7 @@
 import React from 'react';
-import { LayoutDashboard, FileSpreadsheet, PackageCheck, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, PackageCheck, BarChart3, Database, DatabaseZap } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useAppStore } from '../store';
 
 type SidebarProps = {
   currentPage: string;
@@ -8,6 +9,8 @@ type SidebarProps = {
 };
 
 export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
+  const { isConnected, connectToDb } = useAppStore();
+
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'pedidos', label: 'Pedidos de Fio', icon: FileSpreadsheet },
@@ -46,6 +49,44 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
           );
         })}
       </nav>
+
+      <div className="p-4 border-t border-slate-200 space-y-2">
+        <div className="flex items-center justify-between px-2 py-1">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Base de Dados</span>
+          <div className={cn(
+            "w-2 h-2 rounded-full",
+            isConnected ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-red-500"
+          )} />
+        </div>
+
+        <button
+          onClick={connectToDb}
+          className={cn(
+            "w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all",
+            isConnected
+              ? "bg-slate-50 text-slate-700 hover:bg-slate-100"
+              : "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 shadow-sm"
+          )}
+        >
+          {isConnected ? (
+            <>
+              <DatabaseZap className="w-4 h-4 text-emerald-600" />
+              Alterar SQLite
+            </>
+          ) : (
+            <>
+              <Database className="w-4 h-4 text-red-600 animate-pulse" />
+              Selecionar SQLite
+            </>
+          )}
+        </button>
+
+        {!isConnected && (
+          <p className="text-[10px] text-red-500 px-2 leading-tight">
+            Selecione o ficheiro na rede para começar.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,9 +1,12 @@
 import React from 'react';
 import { useAppStore } from '../store';
-import { Package, AlertCircle, CheckCircle2, TrendingUp } from 'lucide-react';
+import { Package, AlertCircle, CheckCircle2, TrendingUp, Download, Info } from 'lucide-react';
+import initSqlJs from 'sql.js';
+
+const SQL_WASM_URL = '/sql-wasm.wasm';
 
 export function Dashboard() {
-  const { state } = useAppStore();
+  const { state, isConnected, connectToDb } = useAppStore();
 
   const totalRequested = state.items.reduce((acc, item) => acc + Number(item.quantity || 0), 0);
   const totalDelivered = state.deliveries.reduce((acc, d) => acc + Number(d.quantity || 0), 0);
@@ -14,8 +17,87 @@ export function Dashboard() {
     return delivered < Number(item.quantity || 0);
   }).length;
 
+  const downloadInitialDb = async () => {
+    const SQL = await initSqlJs({
+      locateFile: () => SQL_WASM_URL,
+    });
+    const db = new SQL.Database();
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS requests (
+        id TEXT PRIMARY KEY,
+        date TEXT,
+        number TEXT,
+        uploadDate TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS items (
+        id TEXT PRIMARY KEY,
+        requestId TEXT,
+        section TEXT,
+        quantity REAL,
+        description TEXT,
+        coneColor TEXT,
+        observations TEXT,
+        FOREIGN KEY(requestId) REFERENCES requests(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS deliveries (
+        id TEXT PRIMARY KEY,
+        itemId TEXT,
+        quantity REAL,
+        date TEXT,
+        deliveryNote TEXT,
+        deliveryDate TEXT,
+        observations TEXT,
+        FOREIGN KEY(itemId) REFERENCES items(id) ON DELETE CASCADE
+      );
+    `);
+
+    const data = db.export();
+    const blob = new Blob([data], { type: 'application/x-sqlite3' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fios_database.db';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-8">
+      {!isConnected && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-red-100 rounded-full shrink-0">
+              <Info className="w-6 h-6 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-red-900">Base de Dados não ligada</h3>
+              <p className="text-red-700 mt-1 max-w-xl">
+                Para começar a usar a aplicação, precisa de selecionar o ficheiro SQLite localizado no servidor/rede.
+                Se for a primeira vez, pode descarregar um ficheiro base vazio abaixo e colocá-lo na pasta partilhada.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            <button
+              onClick={downloadInitialDb}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-white border border-red-200 text-red-700 rounded-lg font-semibold hover:bg-red-50 transition-all shadow-sm"
+            >
+              <Download className="w-5 h-5" />
+              Criar Ficheiro Base
+            </button>
+            <button
+              onClick={connectToDb}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition-all shadow-md"
+            >
+              Selecionar SQLite
+            </button>
+          </div>
+        </div>
+      )}
+
       <header>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
         <p className="text-slate-500 mt-2">Visão geral do estado dos pedidos e entregas de fio.</p>
