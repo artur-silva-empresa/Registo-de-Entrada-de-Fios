@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../store';
-import { Search, Filter, ArrowUpDown, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, ChevronDown, ChevronRight, Download } from 'lucide-react';
+import { exportToExcel } from '../lib/excel';
 
 export function Stock() {
   const { state } = useAppStore();
@@ -8,18 +9,24 @@ export function Stock() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'delivered'>('all');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
-  // Aggregate items by description and section
+  const handleExport = () => {
+    exportToExcel(state.requests, state.items, state.deliveries);
+  };
+
+  // Aggregate items by description, section, and unit
   const aggregatedStock = state.items.reduce((acc, item) => {
     const sectionDisplay = item.section.toLowerCase().includes('tecelagem') ? 'Tecelagem' :
                            item.section.toLowerCase().includes('tinturaria') ? 'Tinturaria' : 
                            item.section.toLowerCase().includes('urdir') ? 'Urdir' : 'Outros';
     
-    const key = `${item.description}-${sectionDisplay}`;
+    const unitDisplay = item.unit || 'Kg';
+    const key = `${item.description}-${sectionDisplay}-${unitDisplay}`;
     if (!acc[key]) {
       acc[key] = {
         id: key,
         description: item.description,
         section: sectionDisplay,
+        unit: unitDisplay,
         requested: 0,
         delivered: 0,
         pending: 0,
@@ -43,9 +50,9 @@ export function Stock() {
     });
     
     return acc;
-  }, {} as Record<string, { id: string; description: string; section: string; requested: number; delivered: number; pending: number; items: any[] }>);
+  }, {} as Record<string, { id: string; description: string; section: string; unit: string; requested: number; delivered: number; pending: number; items: any[] }>);
 
-  const stockList = (Object.values(aggregatedStock) as Array<{ id: string; description: string; section: string; requested: number; delivered: number; pending: number; items: any[] }>).filter(item => {
+  const stockList = (Object.values(aggregatedStock) as Array<{ id: string; description: string; section: string; unit: string; requested: number; delivered: number; pending: number; items: any[] }>).filter(item => {
     const matchesSearch = item.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           item.section.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -67,9 +74,18 @@ export function Stock() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Stock / Faltas</h1>
-        <p className="text-slate-500 mt-2">Visualize o estado global dos fios solicitados e entregues.</p>
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Stock / Faltas</h1>
+          <p className="text-slate-500 mt-2">Visualize o estado global dos fios solicitados e entregues.</p>
+        </div>
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+        >
+          <Download className="w-5 h-5" />
+          Exportar Excel
+        </button>
       </header>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -162,13 +178,13 @@ export function Stock() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right font-medium text-slate-700">
-                          {item.requested.toLocaleString('pt-PT')}
+                          {item.requested.toLocaleString('pt-PT')} {item.unit}
                         </td>
                         <td className="px-6 py-4 text-right font-medium text-emerald-600">
-                          {item.delivered.toLocaleString('pt-PT')}
+                          {item.delivered.toLocaleString('pt-PT')} {item.unit}
                         </td>
                         <td className="px-6 py-4 text-right font-bold text-amber-600">
-                          {item.pending > 0 ? item.pending.toLocaleString('pt-PT') : '0'}
+                          {item.pending > 0 ? item.pending.toLocaleString('pt-PT') : '0'} {item.pending > 0 ? item.unit : ''}
                         </td>
                         <td className="px-6 py-4 text-center">
                           {item.pending <= 0 ? (
@@ -194,9 +210,9 @@ export function Stock() {
                             {subItem.coneColor && <span className="ml-2 text-xs text-slate-400">(Cor: {subItem.coneColor})</span>}
                           </td>
                           <td className="px-6 py-3 text-sm text-slate-500">{subItem.section}</td>
-                          <td className="px-6 py-3 text-right text-sm text-slate-600">{Number(subItem.quantity).toLocaleString('pt-PT')}</td>
-                          <td className="px-6 py-3 text-right text-sm text-emerald-600">{subItem.delivered.toLocaleString('pt-PT')}</td>
-                          <td className="px-6 py-3 text-right text-sm font-medium text-amber-600">{subItem.pending > 0 ? subItem.pending.toLocaleString('pt-PT') : '0'}</td>
+                          <td className="px-6 py-3 text-right text-sm text-slate-600">{Number(subItem.quantity).toLocaleString('pt-PT')} {subItem.unit || 'Kg'}</td>
+                          <td className="px-6 py-3 text-right text-sm text-emerald-600">{subItem.delivered.toLocaleString('pt-PT')} {subItem.unit || 'Kg'}</td>
+                          <td className="px-6 py-3 text-right text-sm font-medium text-amber-600">{subItem.pending > 0 ? subItem.pending.toLocaleString('pt-PT') : '0'} {subItem.pending > 0 ? (subItem.unit || 'Kg') : ''}</td>
                           <td className="px-6 py-3 text-center">
                             {subItem.pending <= 0 ? (
                               <span className="text-xs text-emerald-600 font-medium">Completo</span>

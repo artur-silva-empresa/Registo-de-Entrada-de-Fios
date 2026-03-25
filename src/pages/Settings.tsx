@@ -1,0 +1,167 @@
+import React, { useState, useEffect } from 'react';
+import { Save, Database, AlertCircle, CheckCircle2, Download } from 'lucide-react';
+import { useAppStore } from '../store';
+
+export function Settings() {
+  const { state } = useAppStore();
+  const [dbPath, setDbPath] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.sqliteDbPath) {
+          setDbPath(data.sqliteDbPath);
+        }
+      })
+      .catch(err => console.error('Failed to load settings:', err));
+  }, []);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveStatus('idle');
+    setErrorMessage('');
+
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: dbPath }),
+      });
+
+      if (!res.ok) throw new Error('Falha ao guardar configurações');
+
+      setSaveStatus('success');
+      
+      // Trigger a sync immediately if path is set
+      if (dbPath) {
+        await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state),
+        });
+      }
+
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    } catch (error: any) {
+      setSaveStatus('error');
+      setErrorMessage(error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const res = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+      });
+
+      if (!res.ok) throw new Error('Falha ao exportar base de dados');
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'BaseDados.sqlite';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Erro ao exportar a base de dados.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Configurações</h1>
+        <p className="text-slate-500 mt-2">Gira as configurações da aplicação e base de dados.</p>
+      </header>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-6 border-b border-slate-100">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <Database className="w-5 h-5" />
+            </div>
+            <h2 className="text-lg font-semibold text-slate-800">Base de Dados SQLite</h2>
+          </div>
+          
+          <p className="text-sm text-slate-600 mb-6">
+            Configure o caminho na sua rede local onde o ficheiro SQLite será guardado automaticamente.
+            <br />
+            <span className="text-amber-600 font-medium">Nota:</span> O caminho deve ser acessível pelo servidor onde a aplicação está alojada (ex: <code className="bg-amber-50 px-1 py-0.5 rounded">C:\Dados\fios.sqlite</code> ou <code className="bg-amber-50 px-1 py-0.5 rounded">\\SERVIDOR\Partilha\fios.sqlite</code>).
+          </p>
+
+          <div className="space-y-4 max-w-2xl">
+            <div>
+              <label htmlFor="dbPath" className="block text-sm font-medium text-slate-700 mb-1">
+                Caminho do Ficheiro SQLite
+              </label>
+              <input
+                type="text"
+                id="dbPath"
+                value={dbPath}
+                onChange={(e) => setDbPath(e.target.value)}
+                placeholder="Ex: C:\Dados\fios.sqlite"
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+
+            <div className="flex items-center gap-4 pt-2">
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                {isSaving ? 'A guardar...' : 'Guardar Caminho'}
+              </button>
+
+              {saveStatus === 'success' && (
+                <span className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Guardado com sucesso
+                </span>
+              )}
+
+              {saveStatus === 'error' && (
+                <span className="flex items-center gap-1.5 text-sm text-red-600 font-medium">
+                  <AlertCircle className="w-4 h-4" />
+                  {errorMessage}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 bg-slate-50">
+          <h3 className="text-sm font-semibold text-slate-800 mb-2">Exportação Manual</h3>
+          <p className="text-sm text-slate-600 mb-4">
+            Pode também descarregar a base de dados SQLite atual diretamente para o seu computador.
+          </p>
+          <button
+            onClick={handleExport}
+            disabled={isExporting}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors disabled:opacity-50 shadow-sm"
+          >
+            <Download className="w-4 h-4" />
+            {isExporting ? 'A exportar...' : 'Exportar Base de Dados SQLite'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

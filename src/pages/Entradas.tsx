@@ -39,12 +39,14 @@ export function Entradas() {
     const sectionDisplay = item.section.toLowerCase().includes('tecelagem') ? 'Tecelagem' :
                            item.section.toLowerCase().includes('tinturaria') ? 'Tinturaria' : 
                            item.section.toLowerCase().includes('urdir') ? 'Urdir' : 'Outros';
-    const key = `${item.description}-${sectionDisplay}`;
+    const unitDisplay = item.unit || 'Kg';
+    const key = `${item.description}-${sectionDisplay}-${unitDisplay}`;
     if (!acc[key]) {
       acc[key] = {
         id: key,
         description: item.description,
         section: sectionDisplay,
+        unit: unitDisplay,
         totalPending: 0,
         items: []
       };
@@ -170,7 +172,7 @@ export function Entradas() {
                       </div>
                       <div className="text-right">
                         <div className="text-xs text-slate-500 mb-1">Total em Falta</div>
-                        <div className="text-lg font-bold text-amber-600">{group.totalPending.toLocaleString('pt-PT')}</div>
+                        <div className="text-lg font-bold text-amber-600">{group.totalPending.toLocaleString('pt-PT')} {group.unit}</div>
                       </div>
                     </div>
                     
@@ -204,12 +206,12 @@ export function Entradas() {
                                   )}
                                 </div>
                                 <div className="text-right ml-4">
-                                  <div className="text-sm font-bold text-amber-600">{item.pending.toLocaleString('pt-PT')} em falta</div>
+                                  <div className="text-sm font-bold text-amber-600">{item.pending.toLocaleString('pt-PT')} {item.unit || 'Kg'} em falta</div>
                                 </div>
                               </div>
                               <div className="flex items-center gap-4 text-xs text-slate-500">
-                                <span>Solicitado: <strong className="text-slate-700">{Number(item.quantity).toLocaleString('pt-PT')}</strong></span>
-                                <span>Entregue: <strong className="text-emerald-600">{Number(item.delivered).toLocaleString('pt-PT')}</strong></span>
+                                <span>Solicitado: <strong className="text-slate-700">{Number(item.quantity).toLocaleString('pt-PT')} {item.unit || 'Kg'}</strong></span>
+                                <span>Entregue: <strong className="text-emerald-600">{Number(item.delivered).toLocaleString('pt-PT')} {item.unit || 'Kg'}</strong></span>
                               </div>
                             </div>
                           );
@@ -248,13 +250,13 @@ export function Entradas() {
                         </p>
                         <div className="flex justify-between text-xs mt-2">
                           <span className="text-slate-500">Falta entregar:</span>
-                          <span className="font-bold text-amber-600">{pending.toLocaleString('pt-PT')}</span>
+                          <span className="font-bold text-amber-600">{pending.toLocaleString('pt-PT')} {item?.unit || 'Kg'}</span>
                         </div>
                       </div>
 
                       <div>
                         <label htmlFor="quantity" className="block text-sm font-medium text-slate-700 mb-1">
-                          Quantidade Recebida
+                          Quantidade Recebida ({item?.unit || 'Kg'})
                         </label>
                         <div className="relative">
                           <input

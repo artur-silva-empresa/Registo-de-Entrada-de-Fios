@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAppStore } from '../store';
-import { parseExcel } from '../lib/excel';
-import { Upload, FileSpreadsheet, Trash2, ChevronDown, ChevronUp, FileUp, ChevronRight, PackagePlus } from 'lucide-react';
+import { parseExcel, exportToExcel } from '../lib/excel';
+import { Upload, FileSpreadsheet, Trash2, ChevronDown, ChevronUp, FileUp, ChevronRight, PackagePlus, Download } from 'lucide-react';
 
 export function Pedidos() {
   const { state, addRequest, deleteRequest, addDelivery } = useAppStore();
@@ -18,6 +18,10 @@ export function Pedidos() {
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
   const [deliveryNote, setDeliveryNote] = useState('');
   const [deliveryObservations, setDeliveryObservations] = useState('');
+
+  const handleExport = () => {
+    exportToExcel(state.requests, state.items, state.deliveries);
+  };
 
   const toggleItem = (itemId: string) => {
     setExpandedItems(prev => {
@@ -92,12 +96,19 @@ export function Pedidos() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Pedidos de Fio</h1>
           <p className="text-slate-500 mt-2">Faça upload e gira as solicitações de entrega diária.</p>
         </div>
-        <div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleExport}
+            className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Exportar Excel
+          </button>
           <input
             type="file"
             accept=".xlsx, .xls"
@@ -112,7 +123,7 @@ export function Pedidos() {
             className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
           >
             <Upload className="w-4 h-4" />
-            {isUploading ? 'A processar...' : 'Upload Excel'}
+            {isUploading ? 'A processar...' : 'Upload Pedidos de Fio'}
           </button>
         </div>
       </header>
@@ -238,10 +249,10 @@ export function Pedidos() {
                           <thead className="text-xs text-slate-500 uppercase bg-slate-100">
                             <tr>
                               <th className="px-4 py-3 rounded-tl-lg">Secção</th>
-                              <th className="px-4 py-3">Quantidade</th>
                               <th className="px-4 py-3">Descrição</th>
-                              <th className="px-4 py-3">Observações</th>
+                              <th className="px-4 py-3">Quantidade</th>
                               <th className="px-4 py-3">Quantidade Entregue</th>
+                              <th className="px-4 py-3">Observações</th>
                               <th className="px-4 py-3 rounded-tr-lg w-10"></th>
                             </tr>
                           </thead>
@@ -274,10 +285,12 @@ export function Pedidos() {
                                         {item.section}
                                       </div>
                                     </td>
-                                    <td className="px-4 py-3 font-bold text-slate-700">{Number(item.quantity).toLocaleString('pt-PT')}</td>
                                     <td className="px-4 py-3 text-slate-600">{item.description}</td>
-                                    <td className="px-4 py-3 text-slate-500 italic">{item.observations || '-'}</td>
+                                    <td className="px-4 py-3 font-bold text-slate-700">
+                                      {Number(item.quantity).toLocaleString('pt-PT')} {item.unit || 'Kg'}
+                                    </td>
                                     <td className="px-4 py-3 font-medium text-emerald-600">{delivered.toLocaleString('pt-PT')}</td>
+                                    <td className="px-4 py-3 text-slate-500 italic">{item.observations || '-'}</td>
                                     <td className="px-4 py-3 text-right">
                                       <button
                                         onClick={(e) => {
@@ -301,7 +314,7 @@ export function Pedidos() {
                                             {sortedDeliveries.map((delivery) => (
                                               <div key={delivery.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
                                                 <div className="flex items-center gap-2 min-w-[140px]">
-                                                  <span className="font-bold text-emerald-600">{delivery.quantity} entregues</span>
+                                                  <span className="font-bold text-emerald-600">{delivery.quantity} {item.unit || 'Kg'} entregues</span>
                                                   <span className="text-slate-400 text-xs">•</span>
                                                   <span className="text-slate-600">
                                                     {delivery.deliveryDate ? new Date(delivery.deliveryDate).toLocaleDateString('pt-PT') : new Date(delivery.date).toLocaleDateString('pt-PT')}
@@ -379,7 +392,9 @@ export function Pedidos() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Quantidade Entregue</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Quantidade Entregue ({selectedItemForDelivery.unit || 'Kg'})
+                </label>
                 <input
                   type="number"
                   value={deliveryQuantity}

@@ -5,6 +5,8 @@ import { Dashboard } from './pages/Dashboard';
 import { Pedidos } from './pages/Pedidos';
 import { Entradas } from './pages/Entradas';
 import { Stock } from './pages/Stock';
+import { Faltas } from './pages/Faltas';
+import { Settings } from './pages/Settings';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -19,6 +21,10 @@ export default function App() {
         return <Entradas />;
       case 'stock':
         return <Stock />;
+      case 'faltas':
+        return <Faltas />;
+      case 'settings':
+        return <Settings />;
       default:
         return <Dashboard />;
     }
