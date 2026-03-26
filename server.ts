@@ -3,40 +3,61 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
 import Database from 'better-sqlite3';
+import { exec } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
+  const isProd = process.env.NODE_ENV === 'production';
+
+  // Use the directory where the server script is located for the config file
+  const configPath = path.join(__dirname, 'app-config.json');
 
   app.use(express.json({ limit: '50mb' }));
   app.use('/api/import', express.raw({ type: '*/*', limit: '50mb' }));
 
-  // In-memory store for the SQLite path (in a real app, this would be saved to a config file)
   let sqliteDbPath = '';
-  const configPath = path.join(process.cwd(), 'app-config.json');
   
-  try {
-    if (fs.existsSync(configPath)) {
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      sqliteDbPath = config.sqliteDbPath || '';
+  const loadConfig = () => {
+    try {
+      if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        sqliteDbPath = config.sqliteDbPath || '';
+        console.log(`Configuração carregada. Base de dados em: ${sqliteDbPath || 'Não definida'}`);
+      }
+    } catch (e) {
+      console.error('Erro ao carregar app-config.json:', e);
     }
-  } catch (e) {
-    console.error('Error loading config:', e);
-  }
+  };
+
+  loadConfig();
 
   const saveConfig = (newPath: string) => {
     sqliteDbPath = newPath;
-    fs.writeFileSync(configPath, JSON.stringify({ sqliteDbPath: newPath }));
+    try {
+      fs.writeFileSync(configPath, JSON.stringify({ sqliteDbPath: newPath }, null, 2));
+      console.log(`Configuração guardada em: ${configPath}`);
+    } catch (e) {
+      console.error('Erro ao guardar configuração:', e);
+    }
   };
 
   const readFromSqlite = (dbPath: string) => {
-    if (!dbPath || !fs.existsSync(dbPath)) return null;
+    if (!dbPath || !fs.existsSync(dbPath)) {
+      if (dbPath) console.warn(`Aviso: Ficheiro de base de dados não encontrado em: ${dbPath}`);
+      return null;
+    }
+
     try {
-      const db = new Database(dbPath, { readonly: true });
+      const db = new Database(dbPath, { readonly: true, timeout: 5000 });
       
-      // Check if tables exist
       const hasRequests = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='requests'").get();
       if (!hasRequests) {
+        console.warn('Aviso: Base de dados SQLite não contém a tabela "requests".');
         db.close();
         return null;
       }
@@ -47,7 +68,7 @@ async function startServer() {
       db.close();
       return { requests, items, deliveries };
     } catch (error) {
-      console.error('Error reading from SQLite:', error);
+      console.error('Erro ao ler do SQLite:', error);
       return null;
     }
   };
@@ -56,15 +77,15 @@ async function startServer() {
     if (!dbPath) return;
     
     try {
-      // Ensure directory exists
       const dir = path.dirname(dbPath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
 
-      const db = new Database(dbPath);
+      const db = new Database(dbPath, { timeout: 10000 });
+      // WAL mode is NOT supported on network filesystems (SMB/CIFS)
+      // So we keep the default (DELETE) for maximum compatibility.
 
-      // Create tables
       db.exec(`
         CREATE TABLE IF NOT EXISTS requests (
           id TEXT PRIMARY KEY,
@@ -95,15 +116,15 @@ async function startServer() {
         );
       `);
 
-      // Clear existing data (simple sync approach)
-      db.exec('DELETE FROM deliveries; DELETE FROM items; DELETE FROM requests;');
-
-      // Insert requests
-      const insertRequest = db.prepare('INSERT INTO requests (id, date, number, uploadDate) VALUES (?, ?, ?, ?)');
-      const insertItem = db.prepare('INSERT INTO items (id, requestId, section, quantity, unit, description, coneColor, observations) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-      const insertDelivery = db.prepare('INSERT INTO deliveries (id, itemId, quantity, date, deliveryNote, deliveryDate, observations) VALUES (?, ?, ?, ?, ?, ?, ?)');
-
       db.transaction(() => {
+        // Simple strategy: Clear and re-insert for now
+        // In a network environment, we might want a more granular sync if data gets large
+        db.exec('DELETE FROM deliveries; DELETE FROM items; DELETE FROM requests;');
+
+        const insertRequest = db.prepare('INSERT INTO requests (id, date, number, uploadDate) VALUES (?, ?, ?, ?)');
+        const insertItem = db.prepare('INSERT INTO items (id, requestId, section, quantity, unit, description, coneColor, observations) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        const insertDelivery = db.prepare('INSERT INTO deliveries (id, itemId, quantity, date, deliveryNote, deliveryDate, observations) VALUES (?, ?, ?, ?, ?, ?, ?)');
+
         for (const req of data.requests || []) {
           insertRequest.run(req.id, req.date, req.number, req.uploadDate);
         }
@@ -117,7 +138,7 @@ async function startServer() {
 
       db.close();
     } catch (error) {
-      console.error('Error syncing to SQLite:', error);
+      console.error('Erro ao sincronizar para o SQLite:', error);
       throw error;
     }
   };
@@ -186,24 +207,45 @@ async function startServer() {
     }
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== 'production') {
+  if (!isProd) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    // In production (bundled), the static files are in the same folder as the server script
+    // or in a 'dist' folder if running locally in production mode.
+    let distPath = path.join(__dirname, 'dist');
+    if (!fs.existsSync(distPath)) {
+      distPath = __dirname;
+    }
+
+    console.log(`Servindo ficheiros estáticos de: ${distPath}`);
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPath = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send('Erro: Ficheiro index.html não encontrado.');
+      }
     });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    const url = `http://localhost:${PORT}`;
+    console.log(`Servidor iniciado em ${url}`);
+    console.log('Pressione Ctrl+C para encerrar.');
+
+    // Auto-open browser in production
+    if (isProd) {
+      const start = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+      exec(`${start} ${url}`);
+    }
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error('Erro ao iniciar o servidor:', err);
+});
