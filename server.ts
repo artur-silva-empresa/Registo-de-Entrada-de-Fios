@@ -9,6 +9,7 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
+  app.use('/api/import', express.raw({ type: '*/*', limit: '50mb' }));
 
   // In-memory store for the SQLite path (in a real app, this would be saved to a config file)
   let sqliteDbPath = '';
@@ -26,6 +27,29 @@ async function startServer() {
   const saveConfig = (newPath: string) => {
     sqliteDbPath = newPath;
     fs.writeFileSync(configPath, JSON.stringify({ sqliteDbPath: newPath }));
+  };
+
+  const readFromSqlite = (dbPath: string) => {
+    if (!dbPath || !fs.existsSync(dbPath)) return null;
+    try {
+      const db = new Database(dbPath, { readonly: true });
+      
+      // Check if tables exist
+      const hasRequests = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='requests'").get();
+      if (!hasRequests) {
+        db.close();
+        return null;
+      }
+
+      const requests = db.prepare('SELECT * FROM requests').all();
+      const items = db.prepare('SELECT * FROM items').all();
+      const deliveries = db.prepare('SELECT * FROM deliveries').all();
+      db.close();
+      return { requests, items, deliveries };
+    } catch (error) {
+      console.error('Error reading from SQLite:', error);
+      return null;
+    }
   };
 
   const syncToSqlite = (dbPath: string, data: any) => {
@@ -99,6 +123,12 @@ async function startServer() {
   };
 
   // API Routes
+  app.get('/api/data', (req, res) => {
+    if (!sqliteDbPath) return res.json({ data: null });
+    const data = readFromSqlite(sqliteDbPath);
+    res.json({ data });
+  });
+
   app.get('/api/settings', (req, res) => {
     res.json({ sqliteDbPath });
   });
@@ -107,6 +137,23 @@ async function startServer() {
     const { path: newPath } = req.body;
     saveConfig(newPath);
     res.json({ success: true, sqliteDbPath });
+  });
+
+  app.post('/api/import', (req, res) => {
+    try {
+      const tempPath = path.join(process.cwd(), 'temp_import.sqlite');
+      fs.writeFileSync(tempPath, req.body);
+      const data = readFromSqlite(tempPath);
+      fs.unlinkSync(tempPath);
+      
+      if (!data) {
+        return res.status(400).json({ error: 'Ficheiro SQLite inválido ou vazio.' });
+      }
+      
+      res.json({ success: true, data });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.post('/api/sync', (req, res) => {

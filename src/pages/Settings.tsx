@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Save, Database, AlertCircle, CheckCircle2, Download } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Save, Database, AlertCircle, CheckCircle2, Download, Upload } from 'lucide-react';
 import { useAppStore } from '../store';
 
 export function Settings() {
-  const { state } = useAppStore();
+  const { state, importData } = useAppStore();
   const [dbPath, setDbPath] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch('/api/settings')
@@ -83,6 +85,36 @@ export function Settings() {
     }
   };
 
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: buffer
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Falha ao importar base de dados');
+      }
+
+      const { data } = await res.json();
+      importData(data);
+      alert('Base de dados importada com sucesso!');
+    } catch (error: any) {
+      console.error('Import error:', error);
+      alert(`Erro: ${error.message}`);
+    } finally {
+      setIsImporting(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <header className="mb-8">
@@ -148,18 +180,36 @@ export function Settings() {
         </div>
 
         <div className="p-6 bg-slate-50">
-          <h3 className="text-sm font-semibold text-slate-800 mb-2">Exportação Manual</h3>
+          <h3 className="text-sm font-semibold text-slate-800 mb-2">Importação e Exportação Manual</h3>
           <p className="text-sm text-slate-600 mb-4">
-            Pode também descarregar a base de dados SQLite atual diretamente para o seu computador.
+            Pode importar uma base de dados SQLite existente ou descarregar a atual para o seu computador.
           </p>
-          <button
-            onClick={handleExport}
-            disabled={isExporting}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors disabled:opacity-50 shadow-sm"
-          >
-            <Download className="w-4 h-4" />
-            {isExporting ? 'A exportar...' : 'Exportar Base de Dados SQLite'}
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleExport}
+              disabled={isExporting}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors disabled:opacity-50 shadow-sm"
+            >
+              <Download className="w-4 h-4" />
+              {isExporting ? 'A exportar...' : 'Exportar Base de Dados SQLite'}
+            </button>
+            
+            <input 
+              type="file" 
+              accept=".sqlite,.db" 
+              className="hidden" 
+              ref={fileInputRef} 
+              onChange={handleImport} 
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isImporting}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors disabled:opacity-50 shadow-sm"
+            >
+              <Upload className="w-4 h-4" />
+              {isImporting ? 'A importar...' : 'Importar Base de Dados SQLite'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -40,6 +40,7 @@ type AppContextType = {
   addDelivery: (itemId: string, quantity: number, deliveryNote: string, deliveryDate: string, observations: string) => void;
   deleteRequest: (id: string) => void;
   clearAll: () => void;
+  importData: (data: AppState) => void;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -51,16 +52,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setState(JSON.parse(stored));
+    const loadData = async () => {
+      try {
+        const res = await fetch('/api/data');
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data) {
+            setState(data);
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load from backend', e);
       }
-    } catch (e) {
-      console.error('Failed to load state from localStorage', e);
-    } finally {
-      setIsLoading(false);
-    }
+      
+      // Fallback to localStorage
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          setState(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.error('Failed to load state from localStorage', e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
   }, []);
 
   useEffect(() => {
@@ -130,12 +150,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState({ requests: [], items: [], deliveries: [] });
   };
 
+  const importData = (data: AppState) => {
+    setState(data);
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-screen bg-slate-50 text-slate-500">A carregar dados...</div>;
   }
 
   return (
-    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll }}>
+    <AppContext.Provider value={{ state, addRequest, addDelivery, deleteRequest, clearAll, importData }}>
       {children}
     </AppContext.Provider>
   );
