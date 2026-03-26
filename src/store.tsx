@@ -52,35 +52,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadData = async () => {
+    const loadData = async (isPoll = false) => {
       try {
         const res = await fetch('/api/data');
         if (res.ok) {
           const { data } = await res.json();
           if (data) {
-            setState(data);
-            setIsLoading(false);
+            // Only update if data changed (deep comparison via stringify)
+            setState(prev => {
+              if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
+              return data;
+            });
+            if (!isPoll) setIsLoading(false);
             return;
           }
         }
       } catch (e) {
-        console.error('Failed to load from backend', e);
+        if (!isPoll) console.error('Failed to load from backend', e);
       }
       
-      // Fallback to localStorage
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          setState(JSON.parse(stored));
+      if (!isPoll) {
+        // Fallback to localStorage only on first load
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            setState(JSON.parse(stored));
+          }
+        } catch (e) {
+          console.error('Failed to load state from localStorage', e);
+        } finally {
+          setIsLoading(false);
         }
-      } catch (e) {
-        console.error('Failed to load state from localStorage', e);
-      } finally {
-        setIsLoading(false);
       }
     };
 
     loadData();
+
+    // Polling every 10 seconds for real-time sync with network SQLite
+    const interval = setInterval(() => loadData(true), 10000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
