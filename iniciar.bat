@@ -28,17 +28,22 @@ if defined NODE_PATH (
 
 echo.
 echo A iniciar a aplicacao...
+echo O seu navegador vai abrir automaticamente em alguns segundos.
 echo Pressione CTRL+C para encerrar o servidor quando terminar.
 echo.
 
-:: 2. Executar o servidor
-call .\node_modules\.bin\tsx.cmd server.ts
+:: 2. Iniciar o servidor em segundo plano (usando start /b) e aguardar um pouco
+start /b cmd /c "call .\node_modules\.bin\tsx.cmd server.ts"
 
-:: 3. Se houver erro, manter a janela aberta
-if %ERRORLEVEL% NEQ 0 (
-    echo.
-    color 0C
-    echo [ERRO] Ocorreu um problema ao iniciar o servidor.
-    echo Verifique se executou a preparacao (npm install) num PC sem restricoes.
-    pause
-)
+:: 3. Aguardar 3 segundos para o servidor arrancar
+timeout /t 3 /nobreak > NUL
+
+:: 4. Abrir o navegador automaticamente
+start http://localhost:3000
+
+:: 5. Manter a janela aberta para ver os logs do servidor
+echo.
+echo Servidor a correr em http://localhost:3000
+echo Pode minimizar esta janela.
+echo.
+pause > NUL
