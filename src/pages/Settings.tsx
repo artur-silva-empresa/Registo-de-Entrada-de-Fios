@@ -10,6 +10,7 @@ export function Settings() {
   const [errorMessage, setErrorMessage] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isImportingFromPath, setIsImportingFromPath] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -22,6 +23,34 @@ export function Settings() {
       })
       .catch(err => console.error('Failed to load settings:', err));
   }, []);
+
+  const handleImportFromPath = async () => {
+    if (!dbPath) {
+      alert('Por favor, defina e guarde o caminho do ficheiro SQLite primeiro.');
+      return;
+    }
+
+    setIsImportingFromPath(true);
+    try {
+      const res = await fetch('/api/data');
+      if (!res.ok) {
+        throw new Error('Falha ao carregar dados do caminho configurado.');
+      }
+      
+      const { data } = await res.json();
+      if (!data) {
+        throw new Error('O ficheiro SQLite está vazio ou não existe no caminho configurado.');
+      }
+
+      importData(data);
+      alert('Base de dados importada com sucesso do caminho configurado!');
+    } catch (error: any) {
+      console.error('Import from path error:', error);
+      alert(`Erro: ${error.message}`);
+    } finally {
+      setIsImportingFromPath(false);
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -160,6 +189,15 @@ export function Settings() {
               >
                 <Save className="w-4 h-4" />
                 {isSaving ? 'A guardar...' : 'Guardar Caminho'}
+              </button>
+
+              <button
+                onClick={handleImportFromPath}
+                disabled={isImportingFromPath || !dbPath}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                <Database className="w-4 h-4" />
+                {isImportingFromPath ? 'A carregar...' : 'Carregar do Caminho'}
               </button>
 
               {saveStatus === 'success' && (
