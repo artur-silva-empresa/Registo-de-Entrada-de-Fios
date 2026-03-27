@@ -7,15 +7,23 @@ echo    A iniciar o servidor da Gestao de Fios...
 echo ===================================================
 echo.
 
-:: 1. Tentar encontrar o Node.js portátil (na pasta 'node' dentro do projeto ou um nível acima)
-if exist ".\node\node.exe" (
-    set "PATH=%~dp0node;%PATH%"
-    echo [INFO] Node.js portatil encontrado na pasta do projeto.
-) else if exist "..\node\node.exe" (
-    set "PATH=%~dp0..\node;%PATH%"
+:: 1. Encontrar o Node.js portatil e adicionar ao PATH
+set "NODE_PATH="
+if exist "..\node.exe" (
+    set "NODE_PATH=%~dp0.."
     echo [INFO] Node.js portatil encontrado na pasta anterior.
+) else if exist ".\node\node.exe" (
+    set "NODE_PATH=%~dp0node"
+    echo [INFO] Node.js portatil encontrado na pasta 'node'.
+) else if exist "C:\nodeportable\node\node.exe" (
+    set "NODE_PATH=C:\nodeportable\node"
+    echo [INFO] Node.js portatil encontrado em C:\nodeportable\node.
 ) else (
-    echo [AVISO] Pasta 'node' portatil nao encontrada. A tentar usar o Node.js do sistema...
+    echo [AVISO] Node.js portatil nao encontrado. A tentar usar o Node.js do sistema...
+)
+
+if defined NODE_PATH (
+    set "PATH=%NODE_PATH%;%PATH%"
 )
 
 echo.
@@ -23,7 +31,7 @@ echo A iniciar a aplicacao...
 echo Pressione CTRL+C para encerrar o servidor quando terminar.
 echo.
 
-:: 2. Executar o servidor usando o tsx instalado localmente
+:: 2. Executar o servidor
 call .\node_modules\.bin\tsx.cmd server.ts
 
 :: 3. Se houver erro, manter a janela aberta
