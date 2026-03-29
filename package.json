@@ -4,16 +4,36 @@
   "version": "0.0.0",
   "type": "module",
   "bin": "dist-server/server.cjs",
+  "main": "dist-server/electron-main.cjs",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && npm run build:server",
-    "build:server": "esbuild server.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist-server/server.cjs --external:better-sqlite3 --external:vite",
+    "build": "vite build && npm run build:server && npm run build:electron",
+    "build:server": "esbuild server.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist-server/server.cjs --external:better-sqlite3 --external:vite",
+    "build:electron": "esbuild electron-main.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist-server/electron-main.cjs --external:electron",
     "build:exe": "npm run build && npm run build:server && npm run pkg",
-    "pkg": "pkg . --targets node20-win-x64 --output GestaoFios.exe",
+    "electron:dev": "npm run build:server && npm run build:electron && electron dist-server/electron-main.cjs",
+    "electron:build": "npm run build && npm run build:server && npm run build:electron && electron-builder",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "pkg": "pkg . --targets node18-win-x64 --output GestaoFios.exe",
     "preview": "vite preview",
     "clean": "rm -rf dist dist-server GestaoFios.exe",
     "lint": "tsc --noEmit",
     "start": "node dist-server/server.cjs"
+  },
+  "build": {
+    "appId": "com.gestaofios.app",
+    "productName": "GestaoFios",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-server/**/*",
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "win": {
+      "target": "portable"
+    }
   },
   "pkg": {
     "assets": [
@@ -42,6 +62,9 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
+    "electron": "^41.1.0",
+    "electron-builder": "^26.8.1",
+    "electron-rebuild": "^3.2.9",
     "esbuild": "^0.27.4",
     "pkg": "^5.8.1",
     "tailwindcss": "^4.1.14",

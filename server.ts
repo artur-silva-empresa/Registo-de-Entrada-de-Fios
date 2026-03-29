@@ -261,8 +261,9 @@ async function startServer() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor pronto em http://localhost:${PORT}`);
     
-    // Abrir o browser apenas se estivermos no executável
-    if (isPkg) {
+    // Abrir o browser apenas se estivermos no executável e NÃO no Electron
+    const isElectron = !!process.versions.electron;
+    if (isPkg && !isElectron) {
       const { exec } = require('child_process');
       exec(`start http://localhost:${PORT}`);
     }
