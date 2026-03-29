@@ -204,25 +204,25 @@ async function startServer() {
       console.log('Vite não disponível, ignorando middleware de dev.');
     }
   } else {
-    // No pkg, os assets estão em /snapshot/project/dist
-    const baseDir = isPkg ? path.join((process as any).pkg.entrypoint, '..', '..') : process.cwd();
-    const distPath = path.join(baseDir, 'dist');
+    // No pkg, __dirname refere-se à pasta onde o script está dentro do snapshot
+    // Como o script está em dist-server/, subimos um nível para encontrar a pasta dist
+    const distPath = isPkg 
+      ? path.join(__dirname, '..', 'dist') 
+      : path.join(process.cwd(), 'dist');
     
     console.log(`Servindo ficheiros estáticos de: ${distPath}`);
     
-    if (fs.existsSync(distPath)) {
-      app.use(express.static(distPath));
-      app.get('*', (req, res) => {
-        const indexPath = path.join(distPath, 'index.html');
-        if (fs.existsSync(indexPath)) {
-          res.sendFile(indexPath);
-        } else {
-          res.status(404).send('Interface não encontrada (index.html)');
+    // Registar sempre as rotas, mesmo que o fs.existsSync falhe no snapshot (por vezes o pkg esconde o fs)
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      const indexPath = path.join(distPath, 'index.html');
+      res.sendFile(indexPath, (err) => {
+        if (err) {
+          console.error('Erro ao enviar index.html:', err);
+          res.status(404).send('Interface não encontrada. Verifique se a pasta "dist" foi incluída no build.');
         }
       });
-    } else {
-      console.error(`ERRO: Pasta 'dist' não encontrada em: ${distPath}`);
-    }
+    });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
