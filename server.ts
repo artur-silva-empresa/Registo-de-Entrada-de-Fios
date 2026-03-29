@@ -187,17 +187,29 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV !== 'production' && !process.env.PKG_BUILD) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    // When bundled with pkg, assets are in /snapshot/project/dist
+    // When running normally in prod, assets are in ./dist
+    const isPkg = !!(process as any).pkg;
+    const baseDir = isPkg ? path.join((process as any).pkg.entrypoint, '..', '..') : process.cwd();
+    const distPath = path.join(baseDir, 'dist');
+    
+    console.log(`Serving static files from: ${distPath}`);
+    
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPath = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send('Not found');
+      }
     });
   }
 
