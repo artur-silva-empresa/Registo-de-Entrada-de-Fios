@@ -7,9 +7,9 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && npm run build:server",
-    "build:server": "esbuild server.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist-server/server.cjs --external:better-sqlite3 --external:vite",
+    "build:server": "esbuild server.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist-server/server.cjs --external:better-sqlite3 --external:vite",
     "build:exe": "npm run build && npm run build:server && npm run pkg",
-    "pkg": "pkg . --targets node18-win-x64 --output GestaoFios.exe",
+    "pkg": "pkg . --targets node20-win-x64 --output GestaoFios.exe",
     "preview": "vite preview",
     "clean": "rm -rf dist dist-server GestaoFios.exe",
     "lint": "tsc --noEmit",

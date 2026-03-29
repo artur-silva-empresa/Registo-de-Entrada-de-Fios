@@ -139,6 +139,28 @@ async function startServer() {
     res.json({ sqliteDbPath });
   });
 
+  app.get('/api/browse', async (req, res) => {
+    if (!isPkg) {
+      return res.status(400).json({ error: 'Funcionalidade disponível apenas no executável.' });
+    }
+    
+    try {
+      const { exec } = require('child_process');
+      // PowerShell command to open a file dialog and return the path
+      const cmd = `powershell -Command "Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Filter = 'SQLite Files (*.sqlite)|*.sqlite|All Files (*.*)|*.*'; $f.Title = 'Selecionar Base de Dados SQLite'; $f.ShowDialog() | Out-Null; $f.FileName"`;
+      
+      exec(cmd, (error: any, stdout: string) => {
+        if (error) {
+          return res.status(500).json({ error: 'Erro ao abrir seletor' });
+        }
+        const filePath = stdout.trim();
+        res.json({ path: filePath });
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Falha ao abrir seletor de ficheiros' });
+    }
+  });
+
   app.post('/api/settings', (req, res) => {
     const { path: newPath } = req.body;
     saveConfig(newPath);

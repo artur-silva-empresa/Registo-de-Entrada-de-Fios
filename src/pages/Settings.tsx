@@ -86,6 +86,29 @@ export function Settings() {
     }
   };
 
+  const handleBrowse = async () => {
+    try {
+      const res = await fetch('/api/browse');
+      const data = await res.json();
+      if (data.path) {
+        setDbPath(data.path);
+        // Save automatically after browsing
+        const saveRes = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: data.path }),
+        });
+        if (saveRes.ok) {
+          setSaveStatus('success');
+          setTimeout(() => setSaveStatus('idle'), 3000);
+        }
+      }
+    } catch (error) {
+      console.error('Browse error:', error);
+      alert('Não foi possível abrir o seletor de ficheiros. Certifique-se de que está a usar o executável.');
+    }
+  };
+
   const handleExport = async () => {
     setIsExporting(true);
     try {
@@ -171,14 +194,22 @@ export function Settings() {
               <label htmlFor="dbPath" className="block text-sm font-medium text-slate-700 mb-1">
                 Caminho do Ficheiro SQLite
               </label>
-              <input
-                type="text"
-                id="dbPath"
-                value={dbPath}
-                onChange={(e) => setDbPath(e.target.value)}
-                placeholder="Ex: C:\Dados\fios.sqlite"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="dbPath"
+                  value={dbPath}
+                  onChange={(e) => setDbPath(e.target.value)}
+                  placeholder="Ex: C:\Dados\fios.sqlite"
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                />
+                <button
+                  onClick={handleBrowse}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors border border-slate-300"
+                >
+                  Procurar...
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center gap-4 pt-2">
