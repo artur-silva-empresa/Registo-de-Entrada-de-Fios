@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider } from './store';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './pages/Dashboard';
@@ -10,6 +10,10 @@ import { Settings } from './pages/Settings';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
+
+  useEffect(() => {
+    document.title = 'Gestão de fios';
+  }, []);
 
   const renderPage = () => {
     switch (currentPage) {
