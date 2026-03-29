@@ -4,23 +4,32 @@ import fs from 'fs';
 import Database from 'better-sqlite3';
 
 async function startServer() {
+  console.log('--- Iniciando Servidor Gestão de Fios ---');
+  const isPkg = !!(process as any).pkg;
+  console.log(`Ambiente: ${isPkg ? 'Executável (pkg)' : 'Desenvolvimento'}`);
+  console.log(`Diretório Atual: ${process.cwd()}`);
+  
   const app = express();
   const PORT = 3000;
 
   app.use(express.json({ limit: '50mb' }));
   app.use('/api/import', express.raw({ type: '*/*', limit: '50mb' }));
 
-  // In-memory store for the SQLite path (in a real app, this would be saved to a config file)
+  // In-memory store for the SQLite path
   let sqliteDbPath = '';
+  
+  // Quando corre no pkg, o process.cwd() é onde o .exe está
   const configPath = path.join(process.cwd(), 'app-config.json');
+  console.log(`Caminho do Config: ${configPath}`);
   
   try {
     if (fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       sqliteDbPath = config.sqliteDbPath || '';
+      console.log(`Base de dados configurada: ${sqliteDbPath}`);
     }
   } catch (e) {
-    console.error('Error loading config:', e);
+    console.error('Erro ao carregar config:', e);
   }
 
   const saveConfig = (newPath: string) => {
@@ -29,11 +38,13 @@ async function startServer() {
   };
 
   const readFromSqlite = (dbPath: string) => {
-    if (!dbPath || !fs.existsSync(dbPath)) return null;
+    if (!dbPath || !fs.existsSync(dbPath)) {
+      console.log(`Ficheiro não encontrado: ${dbPath}`);
+      return null;
+    }
     try {
       const db = new Database(dbPath, { readonly: true });
       
-      // Check if tables exist
       const hasRequests = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='requests'").get();
       if (!hasRequests) {
         db.close();
@@ -46,7 +57,7 @@ async function startServer() {
       db.close();
       return { requests, items, deliveries };
     } catch (error) {
-      console.error('Error reading from SQLite:', error);
+      console.error('Erro ao ler SQLite:', error);
       return null;
     }
   };
@@ -55,7 +66,6 @@ async function startServer() {
     if (!dbPath) return;
     
     try {
-      // Ensure directory exists
       const dir = path.dirname(dbPath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -63,7 +73,6 @@ async function startServer() {
 
       const db = new Database(dbPath);
 
-      // Create tables
       db.exec(`
         CREATE TABLE IF NOT EXISTS requests (
           id TEXT PRIMARY KEY,
@@ -94,10 +103,8 @@ async function startServer() {
         );
       `);
 
-      // Clear existing data (simple sync approach)
       db.exec('DELETE FROM deliveries; DELETE FROM items; DELETE FROM requests;');
 
-      // Insert requests
       const insertRequest = db.prepare('INSERT INTO requests (id, date, number, uploadDate) VALUES (?, ?, ?, ?)');
       const insertItem = db.prepare('INSERT INTO items (id, requestId, section, quantity, unit, description, coneColor, observations) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
       const insertDelivery = db.prepare('INSERT INTO deliveries (id, itemId, quantity, date, deliveryNote, deliveryDate, observations) VALUES (?, ?, ?, ?, ?, ?, ?)');
@@ -116,7 +123,7 @@ async function startServer() {
 
       db.close();
     } catch (error) {
-      console.error('Error syncing to SQLite:', error);
+      console.error('Erro ao sincronizar SQLite:', error);
       throw error;
     }
   };
@@ -175,7 +182,6 @@ async function startServer() {
       
       res.download(tempPath, 'BaseDados.sqlite', (err) => {
         if (err) console.error('Error downloading file:', err);
-        // Clean up temp file
         if (fs.existsSync(tempPath)) {
           fs.unlinkSync(tempPath);
         }
@@ -187,35 +193,52 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production' && !process.env.PKG_BUILD) {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.log('Vite não disponível, ignorando middleware de dev.');
+    }
   } else {
-    // When bundled with pkg, assets are in /snapshot/project/dist
-    // When running normally in prod, assets are in ./dist
-    const isPkg = !!(process as any).pkg;
+    // No pkg, os assets estão em /snapshot/project/dist
     const baseDir = isPkg ? path.join((process as any).pkg.entrypoint, '..', '..') : process.cwd();
     const distPath = path.join(baseDir, 'dist');
     
-    console.log(`Serving static files from: ${distPath}`);
+    console.log(`Servindo ficheiros estáticos de: ${distPath}`);
     
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      const indexPath = path.join(distPath, 'index.html');
-      if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-      } else {
-        res.status(404).send('Not found');
-      }
-    });
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        const indexPath = path.join(distPath, 'index.html');
+        if (fs.existsSync(indexPath)) {
+          res.sendFile(indexPath);
+        } else {
+          res.status(404).send('Interface não encontrada (index.html)');
+        }
+      });
+    } else {
+      console.error(`ERRO: Pasta 'dist' não encontrada em: ${distPath}`);
+    }
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Servidor pronto em http://localhost:${PORT}`);
+    
+    // Abrir o browser apenas se estivermos no executável
+    if (isPkg) {
+      const { exec } = require('child_process');
+      exec(`start http://localhost:${PORT}`);
+    }
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error('ERRO FATAL NO ARRANQUE:');
+  console.error(err);
+  // Manter a janela aberta se houver erro fatal
+  setTimeout(() => {}, 1000000);
+});
