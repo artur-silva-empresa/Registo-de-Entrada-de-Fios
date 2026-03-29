@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "bin": "dist-server/server.js",
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && npm run build:server",
