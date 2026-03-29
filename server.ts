@@ -192,7 +192,7 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== 'production' && !process.env.PKG_BUILD) {
+  if (process.env.NODE_ENV !== 'production' && !process.env.PKG_BUILD && !isPkg) {
     try {
       const { createServer: createViteServer } = await import('vite');
       const vite = await createViteServer({
