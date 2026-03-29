@@ -17,10 +17,7 @@
   },
   "pkg": {
     "assets": [
-      "dist/**/*"
-    ],
-    "scripts": [
-      "dist-server/server.cjs"
+      "dist/**"
     ]
   },
   "dependencies": {

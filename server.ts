@@ -204,22 +204,33 @@ async function startServer() {
       console.log('Vite não disponível, ignorando middleware de dev.');
     }
   } else {
-    // No pkg, __dirname refere-se à pasta onde o script está dentro do snapshot
-    // Como o script está em dist-server/, subimos um nível para encontrar a pasta dist
+    // No pkg, os ficheiros estão dentro de um sistema virtual /snapshot/
+    // Tentamos localizar a pasta dist de forma absoluta dentro do pacote
     const distPath = isPkg 
-      ? path.join(__dirname, '..', 'dist') 
+      ? path.resolve(__dirname, '..', 'dist')
       : path.join(process.cwd(), 'dist');
     
-    console.log(`Servindo ficheiros estáticos de: ${distPath}`);
+    console.log(`Tentando servir interface de: ${distPath}`);
     
-    // Registar sempre as rotas, mesmo que o fs.existsSync falhe no snapshot (por vezes o pkg esconde o fs)
+    // Debug: Listar ficheiros se estivermos no executável
+    if (isPkg) {
+      try {
+        const files = fs.readdirSync(distPath);
+        console.log('Ficheiros encontrados na pasta dist:', files.join(', '));
+      } catch (e) {
+        console.error('AVISO: Não foi possível listar a pasta dist. Pode estar vazia ou inacessível.');
+      }
+    }
+    
+    // Servir ficheiros estáticos com fallback explícito para index.html
     app.use(express.static(distPath));
+    
     app.get('*', (req, res) => {
       const indexPath = path.join(distPath, 'index.html');
       res.sendFile(indexPath, (err) => {
         if (err) {
-          console.error('Erro ao enviar index.html:', err);
-          res.status(404).send('Interface não encontrada. Verifique se a pasta "dist" foi incluída no build.');
+          console.error(`Erro ao servir index.html de ${indexPath}:`, err);
+          res.status(404).send('Interface não encontrada. Certifique-se de que correu "npm run build" antes de gerar o EXE.');
         }
       });
     });
