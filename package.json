@@ -8,17 +8,20 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && npm run build:server && npm run build:electron",
-    "build:server": "esbuild server.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist-server/server.cjs --external:better-sqlite3 --external:vite",
-    "build:electron": "esbuild electron-main.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist-server/electron-main.cjs --external:electron",
+    "build:server": "esbuild server.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist-server/server.cjs --external:better-sqlite3 --external:vite",
+    "build:electron": "esbuild electron-main.ts --bundle --platform=node --target=node24 --format=cjs --outfile=dist-server/electron-main.cjs --external:electron",
     "build:exe": "npm run build && npm run build:server && npm run pkg",
     "electron:dev": "npm run build:server && npm run build:electron && electron dist-server/electron-main.cjs",
     "electron:build": "npm run build && npm run build:server && npm run build:electron && electron-builder",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
-    "pkg": "pkg . --targets node18-win-x64 --output GestaoFios.exe",
+    "pkg": "pkg . --targets node24-win-x64 --output GestaoFios.exe",
     "preview": "vite preview",
     "clean": "rm -rf dist dist-server GestaoFios.exe",
     "lint": "tsc --noEmit",
     "start": "node dist-server/server.cjs"
+  },
+  "engines": {
+    "node": "24.14.1"
   },
   "build": {
     "appId": "com.gestaofios.app",
@@ -60,7 +63,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^4.17.21",
-    "@types/node": "^22.14.0",
+    "@types/node": "^24.14.1",
     "autoprefixer": "^10.4.21",
     "electron": "^41.1.0",
     "electron-builder": "^26.8.1",
